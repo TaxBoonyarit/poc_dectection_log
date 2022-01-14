@@ -32,7 +32,7 @@ var (
 	minute            = 1
 	ctx               = context.Background()
 	brokerList        = []string{"localhost:9092"}
-	topic             = "testLogs01"
+	topic             = "testLogs02"
 	messageCountStart = kingpin.Flag("messageCountStart", "Message counter start from:").Int()
 )
 
@@ -80,7 +80,7 @@ func main() {
 			case msg := <-consumer.Messages():
 				// have messages
 				*messageCountStart++
-				//log.Println("Received messages", string(msg.Key), string(msg.Value))
+				log.Println("Received messages", string(msg.Key), string(msg.Value))
 
 				//covert to struct
 				var rule Rule
@@ -255,7 +255,7 @@ func getDataFoElasticsSearch(rule Rule) {
 
 func sendLine(rule Rule) {
 	accessToken := "efpb0Pc6Pyzhcn8745jFQ3zWCNftjfI2u4UsKeLJX3m"
-	message := fmt.Sprintf("\n found data index : %s \n filter name : %s \n  Time duration : %s minute", rule.Index, rule.Filter, rule.TimeDuration)
+	message := fmt.Sprintf("\n found data index : %s \n filter name : %s \n  Time duration : %d minute", rule.Index, rule.Filter, rule.TimeDuration)
 	if err := notify.SendText(accessToken, message); err != nil {
 		panic(err)
 	}
