@@ -32,7 +32,7 @@ var (
 	minute            = 1
 	ctx               = context.Background()
 	brokerList        = []string{"localhost:9092"}
-	topic             = "important"
+	topic             = "testLogs01"
 	messageCountStart = kingpin.Flag("messageCountStart", "Message counter start from:").Int()
 )
 
@@ -80,10 +80,13 @@ func main() {
 			case msg := <-consumer.Messages():
 				// have messages
 				*messageCountStart++
-				if string(msg.Key) == "TEST_LOG01" {
-					getDataFoElasticsSearch(string(msg.Value))
-				}
+				//log.Println("Received messages", string(msg.Key), string(msg.Value))
 
+				//covert to struct
+				var rule Rule
+				_ = json.Unmarshal(msg.Value, &rule)
+
+				getDataFoElasticsSearch(rule)
 			case <-signals:
 				log.Println("Interrupt is detected")
 				doneCh <- struct{}{}
@@ -162,21 +165,14 @@ func sendDataToKafka(rule Rule) {
 		}
 	}()
 
-	var query = fmt.Sprintf(`{
-   "query" : {
-       "term" : {
-           "name" : {
-               "value" : "%s"
-           }
-       }
-   },
-	"size" : %d
-}`, rule.Filter, rule.Total)
+	out, err := json.Marshal(rule)
+	if err != nil {
+		panic(err)
+	}
 
 	msg := &sarama.ProducerMessage{
 		Topic: topic,
-		Key:   sarama.StringEncoder("TEST_LOG01"),
-		Value: sarama.StringEncoder(query),
+		Value: sarama.StringEncoder(out),
 	}
 
 	_, _, err = producer.SendMessage(msg)
@@ -207,7 +203,18 @@ func sendDataToKafka(rule Rule) {
 	//	}
 }
 
-func getDataFoElasticsSearch(query string) {
+func getDataFoElasticsSearch(rule Rule) {
+	var query = fmt.Sprintf(`{
+   "query" : {
+       "term" : {
+           "name" : {
+               "value" : "%s"
+           }
+       }
+   },
+	"size" : %d
+}`, rule.Filter, rule.Total)
+
 	var b strings.Builder
 
 	_, err := b.WriteString(query)
@@ -239,19 +246,16 @@ func getDataFoElasticsSearch(query string) {
 		}
 
 		if checkData {
-			sendLine("alert data")
+			sendLine(rule)
 		}
-
 	}
 
 	defer res.Body.Close()
 }
 
-func sendLine(msg string) {
+func sendLine(rule Rule) {
 	accessToken := "efpb0Pc6Pyzhcn8745jFQ3zWCNftjfI2u4UsKeLJX3m"
-	//message := fmt.Sprintf("\n found data index : %s \n filter name : %s \n source query : %s ", rule.Index, rule.Filter, msg)
-	message := msg
-
+	message := fmt.Sprintf("\n found data index : %s \n filter name : %s \n  Time duration : %s minute", rule.Index, rule.Filter, rule.TimeDuration)
 	if err := notify.SendText(accessToken, message); err != nil {
 		panic(err)
 	}
