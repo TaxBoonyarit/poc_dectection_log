@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"elasticsearch/pkg/elast"
+	"elasticsearch/pkg/queue"
 	"encoding/json"
 	"fmt"
 	"github.com/Shopify/sarama"
@@ -28,45 +30,31 @@ type (
 
 var (
 	mapResp           map[string]interface{}
-	e                 *elasticsearch.Client
+	elastic           *elasticsearch.Client
+	producer          *sarama.SyncProducer
 	minute            = 1
 	ctx               = context.Background()
 	brokerList        = []string{"localhost:9092"}
-	topic             = "testLogs02"
+	topic             = "test555"
 	messageCountStart = kingpin.Flag("messageCountStart", "Message counter start from:").Int()
 )
 
 func main() {
-	cfg := elasticsearch.Config{
-		Addresses: []string{"http://localhost:9200"},
-	}
+	// init elasticsearch
+	setupElasticsearch := elast.NewElasticsearch()
+	elastic = setupElasticsearch.Elastic
 
-	client, err := elasticsearch.NewClient(cfg)
-	if err != nil {
-		fmt.Println(err)
-	}
+	// init producer
+	p := queue.NewProducer()
+	producer = &p.Producer
 
-	e = client
-
-	// consumer
-	config := sarama.NewConfig()
-	config.Consumer.Return.Errors = true
-	brokers := brokerList
-	master, err := sarama.NewConsumer(brokers, config)
+	// init consumer
+	c := queue.NewConsumer()
+	consumer, err := c.Consumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	defer func() {
-		if err := master.Close(); err != nil {
-			log.Panic(err)
-		}
-	}()
-
-	consumer, err := master.ConsumePartition(topic, 0, sarama.OffsetOldest)
-	if err != nil {
-		log.Panic(err)
-	}
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
 	doneCh := make(chan struct{})
@@ -85,9 +73,9 @@ func main() {
 				//covert to struct
 				var rule Rule
 				_ = json.Unmarshal(msg.Value, &rule)
-
-				getDataFoElasticsSearch(rule)
+				getDataForElasticsSearch(rule)
 			case <-signals:
+				consumer.Close()
 				log.Println("Interrupt is detected")
 				doneCh <- struct{}{}
 			}
@@ -95,16 +83,13 @@ func main() {
 	}()
 	<-doneCh
 	log.Println("Processed", *messageCountStart, "messages")
-
-	//for {
-	//	time.Sleep(time.Second * 10)
-	//}
 }
 
 func schedules() {
 	c := cron.New()
 	_ = c.AddFunc("0 * * * *", checkRule)
 	c.Start()
+	fmt.Println("Schedule initializing....")
 }
 
 func checkRule() {
@@ -149,7 +134,6 @@ func checkRule() {
 }
 
 func sendDataToKafka(rule Rule) {
-
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Retry.Max = 5
@@ -181,30 +165,9 @@ func sendDataToKafka(rule Rule) {
 		log.Panic(err)
 	}
 
-	//data := make(chan interface{}, 1)
-	//
-	//go func() {
-	//	data <- rule
-	//	close(data)
-	//}()
-
-	//	for res := range data {
-	//		covertData := res.(Rule)
-	//		var query = fmt.Sprintf(`{
-	//    "query" : {
-	//        "term" : {
-	//            "name" : {
-	//                "value" : "%s"
-	//            }
-	//        }
-	//    },
-	//	"size" : %d
-	//}`, covertData.Filter, covertData.Total)
-	//		getDataFoElasticsSearch(query, covertData)
-	//	}
 }
 
-func getDataFoElasticsSearch(rule Rule) {
+func getDataForElasticsSearch(rule Rule) {
 	var query = fmt.Sprintf(`{
    "query" : {
        "term" : {
@@ -224,12 +187,12 @@ func getDataFoElasticsSearch(rule Rule) {
 	}
 	read := strings.NewReader(b.String())
 
-	res, err := e.Search(
-		e.Search.WithContext(ctx),
-		e.Search.WithIndex(rule.Index),
-		e.Search.WithBody(read),
-		e.Search.WithTrackTotalHits(true),
-		e.Search.WithPretty(),
+	res, err := elastic.Search(
+		elastic.Search.WithContext(ctx),
+		elastic.Search.WithIndex(rule.Index),
+		elastic.Search.WithBody(read),
+		elastic.Search.WithTrackTotalHits(true),
+		elastic.Search.WithPretty(),
 	)
 
 	if err != nil {
