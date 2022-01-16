@@ -9,10 +9,6 @@ type Consumer struct {
 	Consumer sarama.Consumer
 }
 
-func init() {
-
-}
-
 func NewConsumer() Consumer {
 	config := sarama.NewConfig()
 	config.Consumer.Return.Errors = true
