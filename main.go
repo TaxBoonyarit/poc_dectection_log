@@ -31,11 +31,10 @@ type (
 var (
 	mapResp           map[string]interface{}
 	elastic           *elasticsearch.Client
-	producer          *sarama.SyncProducer
+	producer          sarama.SyncProducer
 	minute            = 1
 	ctx               = context.Background()
-	brokerList        = []string{"localhost:9092"}
-	topic             = "test555"
+	topic             = "test666"
 	messageCountStart = kingpin.Flag("messageCountStart", "Message counter start from:").Int()
 )
 
@@ -46,7 +45,7 @@ func main() {
 
 	// init producer
 	p := queue.NewProducer()
-	producer = &p.Producer
+	producer = p.Producer
 
 	// init consumer
 	c := queue.NewConsumer()
@@ -76,6 +75,7 @@ func main() {
 				getDataForElasticsSearch(rule)
 			case <-signals:
 				consumer.Close()
+				producer.Close()
 				log.Println("Interrupt is detected")
 				doneCh <- struct{}{}
 			}
@@ -134,22 +134,6 @@ func checkRule() {
 }
 
 func sendDataToKafka(rule Rule) {
-	config := sarama.NewConfig()
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	config.Producer.Retry.Max = 5
-	config.Producer.Return.Successes = true
-	producer, err := sarama.NewSyncProducer(brokerList, config)
-
-	if err != nil {
-		log.Panic(err)
-	}
-
-	defer func() {
-		if err := producer.Close(); err != nil {
-			log.Panic(err)
-		}
-	}()
-
 	out, err := json.Marshal(rule)
 	if err != nil {
 		panic(err)
