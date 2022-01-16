@@ -149,6 +149,7 @@ func checkRule() {
 }
 
 func sendDataToKafka(rule Rule) {
+
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Retry.Max = 5
@@ -225,7 +226,7 @@ func getDataFoElasticsSearch(rule Rule) {
 
 	res, err := e.Search(
 		e.Search.WithContext(ctx),
-		e.Search.WithIndex("products"),
+		e.Search.WithIndex(rule.Index),
 		e.Search.WithBody(read),
 		e.Search.WithTrackTotalHits(true),
 		e.Search.WithPretty(),
