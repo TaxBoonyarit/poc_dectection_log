@@ -1,4 +1,4 @@
-package elast
+package search
 
 import (
 	"fmt"

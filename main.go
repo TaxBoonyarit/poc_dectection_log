@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"elasticsearch/pkg/elast"
 	"elasticsearch/pkg/queue"
+	"elasticsearch/pkg/search"
 	"encoding/json"
 	"fmt"
 	"github.com/Shopify/sarama"
@@ -13,7 +13,6 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 	"log"
 	"net/http"
-	"net/smtp"
 	"os"
 	"os/signal"
 	"strings"
@@ -40,7 +39,7 @@ var (
 
 func main() {
 	// init elasticsearch
-	setupElasticsearch := elast.NewElasticsearch()
+	setupElasticsearch := search.NewElasticsearch()
 	elastic = setupElasticsearch.Elastic
 
 	// init producer
@@ -62,7 +61,7 @@ func main() {
 		schedules()
 		for {
 			select {
-			case err := <-consumer.Errors():
+			case err = <-consumer.Errors():
 				log.Println(err)
 			case msg := <-consumer.Messages():
 				// have messages
@@ -148,7 +147,6 @@ func sendDataToKafka(rule Rule) {
 	if err != nil {
 		log.Panic(err)
 	}
-
 }
 
 func getDataForElasticsSearch(rule Rule) {
@@ -169,8 +167,8 @@ func getDataForElasticsSearch(rule Rule) {
 	if err != nil {
 		panic(err)
 	}
-	read := strings.NewReader(b.String())
 
+	read := strings.NewReader(b.String())
 	res, err := elastic.Search(
 		elastic.Search.WithContext(ctx),
 		elastic.Search.WithIndex(rule.Index),
@@ -182,6 +180,7 @@ func getDataForElasticsSearch(rule Rule) {
 	if err != nil {
 		panic(err)
 	}
+
 	if res.StatusCode == http.StatusOK {
 		var checkData bool
 		if err = json.NewDecoder(res.Body).Decode(&mapResp); err != nil {
@@ -206,25 +205,5 @@ func sendLine(rule Rule) {
 	message := fmt.Sprintf("\n found data index : %s \n filter name : %s \n  Time duration : %d minute", rule.Index, rule.Filter, rule.TimeDuration)
 	if err := notify.SendText(accessToken, message); err != nil {
 		panic(err)
-	}
-}
-
-func sendEmail() {
-	from := "inwtax@gmail.com"
-	password := "0554861712"
-	to := []string{"boonyarit.b@securitypitch.com"}
-	smtpHost := "smtp.gmail.com"
-	smtpPort := "587"
-
-	message := []byte("Hello Test.")
-
-	// Create authentication
-	auth := smtp.PlainAuth("", from, password, smtpHost)
-
-	// Send actual message
-	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, to, message)
-	if err != nil {
-		fmt.Println(err)
-		log.Fatal(err)
 	}
 }
