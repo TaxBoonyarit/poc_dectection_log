@@ -4,10 +4,9 @@ import (
 	"github.com/juunini/simple-go-line-notify/notify"
 )
 
-func sendLine() {
+func SendLine(msg string) {
 	accessToken := "efpb0Pc6Pyzhcn8745jFQ3zWCNftjfI2u4UsKeLJX3m"
-	message := "Hello"
-	if err := notify.SendText(accessToken, message); err != nil {
+	if err := notify.SendText(accessToken, msg); err != nil {
 		panic(err)
 	}
 }
